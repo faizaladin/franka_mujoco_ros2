@@ -14,11 +14,8 @@ class FrankaSim(Node):
     def __init__(self):
         super().__init__('franka_sim')
         
-        # --- Publishers for Front Camera ---
         self.front_rgb_pub = self.create_publisher(Image, '/camera/front/image_raw', 10)
         self.front_depth_pub = self.create_publisher(Image, '/camera/front/depth_raw', 10)
-        
-        # --- Publishers for Top-Down Camera ---
         self.top_rgb_pub = self.create_publisher(Image, '/camera/top_down/image_raw', 10)
         self.top_depth_pub = self.create_publisher(Image, '/camera/top_down/depth_raw', 10)
 
@@ -41,12 +38,14 @@ class FrankaSim(Node):
 
         self.data = mujoco.MjData(self.model)
         
+        # --- Check Actuators ---
+        self.num_actuators = self.model.nu
+        self.get_logger().info(f"Model has {self.num_actuators} actuators.")
+
         self.has_camera = False
         if self.model.ncam > 0:
-            # Shared renderer for all camera passes
             self.renderer = mujoco.Renderer(self.model, height=480, width=640)
             self.has_camera = True
-            self.get_logger().info(f"Initialized with {self.model.ncam} cameras.")
         else:
             self.get_logger().warn("No camera found.")
 
@@ -54,32 +53,24 @@ class FrankaSim(Node):
         self.create_timer(0.01, self.timer_callback)
 
     def publish_camera(self):
-        # Define camera configurations to loop through
         cam_configs = [
             {"name": "rgb_camera", "rgb_pub": self.front_rgb_pub, "depth_pub": self.front_depth_pub, "frame": "front_cam_link"},
             {"name": "top_down_camera", "rgb_pub": self.top_rgb_pub, "depth_pub": self.top_depth_pub, "frame": "top_down_link"}
         ]
-
         timestamp = self.get_clock().now().to_msg()
-
         for cam in cam_configs:
-            # 1. Render RGB
             self.renderer.update_scene(self.data, camera=cam["name"])
             rgb_image = self.renderer.render()
-
-            # 2. Render Depth
             self.renderer.enable_depth_rendering()
             self.renderer.update_scene(self.data, camera=cam["name"])
             depth_image = self.renderer.render()
             self.renderer.disable_depth_rendering()
 
-            # 3. Convert and Publish RGB
             rgb_msg = self.bridge.cv2_to_imgmsg(rgb_image, encoding="rgb8")
             rgb_msg.header.stamp = timestamp
             rgb_msg.header.frame_id = cam["frame"]
             cam["rgb_pub"].publish(rgb_msg)
 
-            # 4. Convert and Publish Depth
             depth_msg = self.bridge.cv2_to_imgmsg(depth_image, encoding='passthrough')
             depth_msg.header.stamp = timestamp
             depth_msg.header.frame_id = cam["frame"]
@@ -89,7 +80,6 @@ class FrankaSim(Node):
         mujoco.mj_step(self.model, self.data)
         self.viewer.sync()
         
-        # Publish at 10Hz (every 10 steps if timer is 0.01s)
         if self.has_camera and int(self.data.time * 100) % 10 == 0:
             self.publish_camera()
 
@@ -98,13 +88,29 @@ class FrankaSim(Node):
             self.publish_end_effector()
 
         if self.control is not None and int(self.data.time * 100) % 10 == 0:
-            self.data.ctrl[:8] = self.control[:8]
+            # --- Robust Control Mapping ---
+            # We expect self.control to have 8 elements (7 arm + 1 gripper)
+            if len(self.control) >= 8:
+                # 1. Apply Arm Control (First 7)
+                self.data.ctrl[:7] = self.control[:7]
+                
+                # 2. Apply Gripper Control
+                gripper_val = self.control[7]
+                
+                if self.num_actuators == 8:
+                    # Case A: 8 Actuators (Gripper is coupled in XML)
+                    self.data.ctrl[7] = gripper_val
+                elif self.num_actuators == 9:
+                    # Case B: 9 Actuators (Standard Franka, distinct fingers)
+                    # We map the SINGLE gripper command to BOTH finger actuators
+                    self.data.ctrl[7] = gripper_val
+                    self.data.ctrl[8] = gripper_val
 
-    # ... keep publish_joints, publish_end_effector, and get_control the same ...
     def publish_joints(self):
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.name = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'joint7', 'finger_joint1', 'finger_joint2']
+        # Just grab however many qpos we have
         msg.position = self.data.qpos[:9].tolist()
         msg.velocity = self.data.qvel[:9].tolist()
         self.joint_pub.publish(msg)
@@ -125,12 +131,9 @@ class FrankaSim(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = FrankaSim()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
+    try: rclpy.spin(node)
+    except KeyboardInterrupt: pass
     finally:
-        if hasattr(node, 'viewer'):
-            node.viewer.close()
+        if hasattr(node, 'viewer'): node.viewer.close()
         node.destroy_node()
         rclpy.shutdown()

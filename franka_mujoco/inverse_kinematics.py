@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Float64 
 import numpy as np
 import math
 
@@ -15,7 +16,6 @@ class FrankaAnalyticalIK:
         self.a4 = 0.0825
         self.a7 = 0.0880
 
-        # Pre-calculated geometric constants
         self.LL24 = 0.10666225
         self.LL46 = 0.15426225
         self.L24 = 0.326591870689
@@ -25,13 +25,11 @@ class FrankaAnalyticalIK:
         self.theta342 = 1.31542071191
         self.theta46H = 0.211626808766
 
-        # Joint Limits (Radians)
         self.q_min = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973])
         self.q_max = np.array([2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973])
 
     def solve(self, O_T_EE, q7):
-        if q7 <= self.q_min[6] or q7 >= self.q_max[6]:
-            return []
+        if q7 <= self.q_min[6] or q7 >= self.q_max[6]: return []
 
         R_EE = O_T_EE[0:3, 0:3]
         z_EE = O_T_EE[0:3, 2]
@@ -57,8 +55,7 @@ class FrankaAnalyticalIK:
         theta246 = math.acos(np.clip((self.LL24 + self.LL46 - LL26) / (2.0 * self.L24 * self.L46), -1.0, 1.0))
         q4 = theta246 + self.thetaH46 + self.theta342 - 2.0 * math.pi
 
-        if not (self.q_min[3] <= q4 <= self.q_max[3]):
-            return []
+        if not (self.q_min[3] <= q4 <= self.q_max[3]): return []
 
         theta462 = math.acos(np.clip((LL26 + self.LL46 - self.LL24) / (2.0 * L26 * self.L46), -1.0, 1.0))
         theta26H = self.theta46H + theta462
@@ -93,7 +90,6 @@ class FrankaAnalyticalIK:
         for q6 in q6_candidates:
             while q6 <= self.q_min[5]: q6 += 2.0 * math.pi
             while q6 >= self.q_max[5]: q6 -= 2.0 * math.pi
-            
             if not (self.q_min[5] <= q6 <= self.q_max[5]): continue
 
             z_6_5 = np.array([math.sin(q6), math.cos(q6), 0.0])
@@ -144,69 +140,63 @@ class InverseKinematics(Node):
         super().__init__('ik_node')
         self.sub_joints = self.create_subscription(JointState, '/joint_states', self.get_joint_states, 10)
         self.sub_target = self.create_subscription(PoseStamped, '/target_pose', self.get_target_pose, 10)
+        self.sub_gripper = self.create_subscription(Float64, '/gripper_command', self.get_gripper_cmd, 10)
         
         self.pub_control = self.create_publisher(JointState, '/inverse_control', 10)
         
         self.joints_pos = None
         self.solver = FrankaAnalyticalIK()
+        self.target_pos = None
+        self.target_rot_matrix = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
+        self.gripper_width = 0.04 
 
-        # --- MODIFIED: Start with NO target ---
-        # self.target_pos = np.array([0.5, 0.3, 0.4]) 
-        self.target_pos = None 
-        self.target_rot_matrix = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]]) # Pointing Down
-
-        self.get_logger().info("IK Node Online. Waiting for /target_pose...")
+        self.get_logger().info("IK Node Online (Single Gripper Joint Mode).")
         self.create_timer(0.05, self.inverse)
 
     def get_joint_states(self, msg):
         self.joints_pos = list(msg.position[:7])
 
     def get_target_pose(self, msg):
-        # Once we receive a message, we update the target
         self.target_pos = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
-        self.get_logger().info(f"New Target Received: {self.target_pos}")
+        self.get_logger().info(f"Target Received: {self.target_pos}")
+
+    def get_gripper_cmd(self, msg):
+        self.gripper_width = msg.data
+        self.get_logger().info(f"Gripper Command: {self.gripper_width}")
 
     def inverse(self):
-        # --- MODIFIED: Return if no target set yet ---
-        if self.joints_pos is None or self.target_pos is None:
-            return
+        if self.joints_pos is None or self.target_pos is None: return
 
-        # 1. Build T-matrix
         O_T_EE = np.eye(4)
         O_T_EE[0:3, 0:3] = self.target_rot_matrix
         O_T_EE[0:3, 3]   = self.target_pos
 
-        # 2. Multi-sample Search for q7 (Redundancy)
         current_q7 = self.joints_pos[6]
         q7_test_points = [current_q7, 0.0, 0.785, -0.785, 1.57, -1.57]
         
         all_solutions = []
         for q7 in q7_test_points:
             sols = self.solver.solve(O_T_EE, q7)
-            if sols:
-                all_solutions.extend(sols)
+            if sols: all_solutions.extend(sols)
 
-        if not all_solutions:
-            return 
+        if not all_solutions: return 
 
-        # 3. Find the solution closest to current state
         best_sol = min(all_solutions, key=lambda s: np.linalg.norm(np.array(s) - np.array(self.joints_pos)))
 
-        # 4. Publish
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.name = ['panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 
-                    'panda_joint5', 'panda_joint6', 'panda_joint7']
-        msg.position = best_sol + [0.04, 0.04] 
+                    'panda_joint5', 'panda_joint6', 'panda_joint7', 'panda_finger_joint1']
+        
+        # --- SENDING 8 VALUES (7 Arm + 1 Gripper) ---
+        msg.position = best_sol + [self.gripper_width]
         self.pub_control.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
     node = InverseKinematics()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
+    try: rclpy.spin(node)
+    except KeyboardInterrupt: pass
     finally:
         node.destroy_node()
         rclpy.shutdown()
