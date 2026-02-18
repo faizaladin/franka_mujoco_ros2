@@ -143,8 +143,6 @@ class InverseKinematics(Node):
     def __init__(self):
         super().__init__('ik_node')
         self.sub_joints = self.create_subscription(JointState, '/joint_states', self.get_joint_states, 10)
-        
-        # New: Target Pose Subscriber so you can move it via CLI
         self.sub_target = self.create_subscription(PoseStamped, '/target_pose', self.get_target_pose, 10)
         
         self.pub_control = self.create_publisher(JointState, '/inverse_control', 10)
@@ -152,24 +150,25 @@ class InverseKinematics(Node):
         self.joints_pos = None
         self.solver = FrankaAnalyticalIK()
 
-        # Default Target (Safe Reachable Point)
-        self.target_pos = np.array([0.5, 0.3, 0.4])
+        # --- MODIFIED: Start with NO target ---
+        # self.target_pos = np.array([0.5, 0.3, 0.4]) 
+        self.target_pos = None 
         self.target_rot_matrix = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]]) # Pointing Down
 
-        self.get_logger().info("IK Node Online. Send PoseStamped to /target_pose to move.")
+        self.get_logger().info("IK Node Online. Waiting for /target_pose...")
         self.create_timer(0.05, self.inverse)
 
     def get_joint_states(self, msg):
-        # Mujoco or hardware might return more than 7 joints; take the first 7
         self.joints_pos = list(msg.position[:7])
 
     def get_target_pose(self, msg):
+        # Once we receive a message, we update the target
         self.target_pos = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
-        # Note: This keeps the fixed "downward" rotation for simplicity. 
-        # You could also extract the orientation from the msg.pose.orientation if needed.
+        self.get_logger().info(f"New Target Received: {self.target_pos}")
 
     def inverse(self):
-        if self.joints_pos is None:
+        # --- MODIFIED: Return if no target set yet ---
+        if self.joints_pos is None or self.target_pos is None:
             return
 
         # 1. Build T-matrix
@@ -186,14 +185,11 @@ class InverseKinematics(Node):
             sols = self.solver.solve(O_T_EE, q7)
             if sols:
                 all_solutions.extend(sols)
-                # If we want efficiency, we could 'break' here, 
-                # but searching all gives us the smoothest choice.
 
         if not all_solutions:
-            return # Unreachable
+            return 
 
-        # 3. Find the solution closest to current state (Minimize 'jumping')
-        # Fix: best_sol is a list, so we don't call .tolist()
+        # 3. Find the solution closest to current state
         best_sol = min(all_solutions, key=lambda s: np.linalg.norm(np.array(s) - np.array(self.joints_pos)))
 
         # 4. Publish
@@ -201,7 +197,7 @@ class InverseKinematics(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.name = ['panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 
                     'panda_joint5', 'panda_joint6', 'panda_joint7']
-        msg.position = best_sol + [0.04, 0.04] # list + list works perfectly
+        msg.position = best_sol + [0.04, 0.04] 
         self.pub_control.publish(msg)
 
 def main(args=None):
