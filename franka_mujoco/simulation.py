@@ -38,7 +38,6 @@ class FrankaSim(Node):
 
         self.data = mujoco.MjData(self.model)
         
-        # --- Check Actuators ---
         self.num_actuators = self.model.nu
         self.get_logger().info(f"Model has {self.num_actuators} actuators.")
 
@@ -88,21 +87,15 @@ class FrankaSim(Node):
             self.publish_end_effector()
 
         if self.control is not None and int(self.data.time * 100) % 10 == 0:
-            # --- Robust Control Mapping ---
-            # We expect self.control to have 8 elements (7 arm + 1 gripper)
             if len(self.control) >= 8:
-                # 1. Apply Arm Control (First 7)
+
                 self.data.ctrl[:7] = self.control[:7]
                 
-                # 2. Apply Gripper Control
                 gripper_val = self.control[7]
                 
                 if self.num_actuators == 8:
-                    # Case A: 8 Actuators (Gripper is coupled in XML)
                     self.data.ctrl[7] = gripper_val
                 elif self.num_actuators == 9:
-                    # Case B: 9 Actuators (Standard Franka, distinct fingers)
-                    # We map the SINGLE gripper command to BOTH finger actuators
                     self.data.ctrl[7] = gripper_val
                     self.data.ctrl[8] = gripper_val
 
@@ -110,7 +103,6 @@ class FrankaSim(Node):
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.name = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'joint7', 'finger_joint1', 'finger_joint2']
-        # Just grab however many qpos we have
         msg.position = self.data.qpos[:9].tolist()
         msg.velocity = self.data.qvel[:9].tolist()
         self.joint_pub.publish(msg)
