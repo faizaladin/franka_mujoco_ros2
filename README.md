@@ -35,7 +35,7 @@ The forward kinematics script helps calculate the end effector position and comp
 ros2 run franka_mujoco forward_kin
 ```
 
-The inverse kinematics script will take in a goal position and calculate the joint positions the robot needs to move to. You can either set the goal state within the script or right a separate script to send goal states
+The inverse kinematics script will take in a goal position and calculate the joint positions the robot needs to move to. You can either set the goal state within the script or write a separate script to send goal states
 ```
 ros2 run franka_mujoco inverse_kin
 ```
