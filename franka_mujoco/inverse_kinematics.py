@@ -188,7 +188,6 @@ class InverseKinematics(Node):
         msg.name = ['panda_joint1', 'panda_joint2', 'panda_joint3', 'panda_joint4', 
                     'panda_joint5', 'panda_joint6', 'panda_joint7', 'panda_finger_joint1']
         
-        # --- SENDING 8 VALUES (7 Arm + 1 Gripper) ---
         msg.position = best_sol + [self.gripper_width]
         self.pub_control.publish(msg)
 
