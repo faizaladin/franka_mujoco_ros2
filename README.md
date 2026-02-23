@@ -37,6 +37,10 @@ The camera pick and place script generates a 3d pointcloud and uses color filter
 ```
 ros2 run franka_mujoco cam_pick_and_place
 ```
+By defualt the robot will try to pick up the red cube. If you want it to the grab the green cube run: 
+```
+ros2 run franka_mujoco cam_pick_and_place --green
+```
 
 ## Results
 
