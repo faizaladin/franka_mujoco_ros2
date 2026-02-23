@@ -77,10 +77,6 @@ class ForwardKinematics(Node):
 
 
 
-        # # 3. Log (Rounded to 3 decimals)
-        # self.get_logger().info(f"POS: {np.round(pos, 3)}")
-        # self.get_logger().info(f"VEL: {np.round(vel, 3)}")
-
 def main(args=None):
     rclpy.init(args=args)
     node = ForwardKinematics()
