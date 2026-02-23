@@ -5,13 +5,20 @@ This project implements a pick and place task using a Franka Emika Panda robot. 
 System Requirements: Ubuntu 24.04 and ROS2 Jazzy
 
 ## How to Use
-First install the virtual environment using the requirements.txt file:
+First install the virtual environment by running the following commands in your root workspace:
 ```
-uv install requirements.txt
+uv venv franka --system-site-packages
+
+# 2. Activate the environment
+source franka/bin/activate
+
+# 3. Install the required Python packages
+uv pip install -r requirements.txt
 ```
 We can then build the package using the following alias:
 ```
-build =
+alias build='source ~/ros2_ws/franka/bin/activate && cd ~/ros2_ws/ && colcon build --symlink-install && source install/setup.bash'
+build
 ```
 Using an alias makes it easier to build everytime instead of using the same commands
 
