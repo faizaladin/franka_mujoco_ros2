@@ -50,5 +50,8 @@ ros2 run franka_mujoco cam_pick_and_place --green
 ```
 
 ## Results
-
+Pointcloud generated from cameras:
+<p align="center">
+  <img src="assets/pointcloud.jpg" alt="Camera Setup" width="400">
+</p>
 
