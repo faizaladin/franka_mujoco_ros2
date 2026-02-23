@@ -72,14 +72,8 @@ class CubeTracker(Node):
             self.get_logger().error(f"Error: {e}")
 
     def execute_pick_sequence(self, center):
-        # --- TUNING PARAMETERS ---
         hover_z = float(center[2]) + 0.20
         
-        # LOWER GRASP Z
-        # center[2] is box top (~0.05m). 
-        # Adding 0.035 puts flange at 0.085m.
-        # Since fingers are ~0.10m long, tips will go to -0.015m (just slightly into table)
-        # This ensures a deep grasp.
         grasp_z = float(center[2]) + 0.035
 
         self.get_logger().info(f"Target Grasp Z: {grasp_z:.4f}")
@@ -105,7 +99,6 @@ class CubeTracker(Node):
                 send_pose(center[0], center[1], z)
                 time.sleep(delay)
 
-        # 2. EXECUTION SEQUENCE
         self.get_logger().info("--- 1. MOVE TO HOVER ---")
         send_gripper(0.04) 
         send_pose(center[0], center[1], hover_z)
@@ -114,7 +107,6 @@ class CubeTracker(Node):
         self.get_logger().info("--- 2. SLOW APPROACH ---")
         smooth_approach(hover_z, grasp_z, steps=70, delay=0.05) 
         
-        # CRITICAL UPDATE: Increased Settling Time
         self.get_logger().info(f"--- Settling (5s) ---")
         time.sleep(5.0) 
 
