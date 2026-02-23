@@ -55,3 +55,9 @@ Pointcloud generated from cameras:
   <img src="assets/pointcloud.jpg" alt="Camera Setup" width="400">
 </p>
 
+Pick and Place for red and green cubes:
+<p align="center">
+  <img src="assets/robot_redcube.gif" width="45%" />
+  &nbsp; &nbsp; &nbsp; &nbsp;
+  <img src="assets/robot_greencube.gif" width="45%" />
+</p>
