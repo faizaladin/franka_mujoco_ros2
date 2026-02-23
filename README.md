@@ -61,3 +61,5 @@ Pick and Place for red and green cubes:
   &nbsp; &nbsp; &nbsp; &nbsp;
   <img src="assets/robot_greencube.gif" width="45%" />
 </p>
+
+You can make the movements smoother by add more frames for each part of the task movement or by publishing more images per second. Due to the virtual machine capabilities I was using, it is not as smooth as I would like it to be. 
