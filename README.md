@@ -6,19 +6,19 @@ System Requirements: Ubuntu 24.04 and ROS2 Jazzy
 
 ## How to Use
 First install the virtual environment using the requirements.txt file:
-'''
+```
 uv install requirements.txt
-'''
+```
 We can then build the package using the following alias:
-'''
+```
 build =
-'''
+```
 Using an alias makes it easier to build everytime instead of using the same commands
 
 To start the simulation, run the following command inside your workspace:
-'''
+```
 ros2 run franka_mujoco start_sim
-'''
+```
 This command launches the simulation
 
 
