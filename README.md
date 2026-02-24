@@ -9,10 +9,8 @@ First install the virtual environment by running the following commands in your 
 ```
 uv venv franka --system-site-packages
 
-# 2. Activate the environment
 source franka/bin/activate
 
-# 3. Install the required Python packages
 uv pip install -r requirements.txt
 ```
 We can then build the package using the following alias:
